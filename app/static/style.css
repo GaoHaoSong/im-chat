@@ -79,3 +79,11 @@ input, textarea { font-family: inherit; }
 .context-menu { position:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.08); z-index:50; }
 .context-menu button { display:block; padding:8px 16px; background:transparent; border:none; min-width:120px; text-align:left; }
 .context-menu button:hover { background:#f3f4f6; }
+.mention { color:#3b82f6; font-weight:600; }
+.msg.mine .mention { color:#fde68a; }
+.reply-quote { padding:6px 8px; border-left:3px solid #3b82f6; background:rgba(59,130,246,0.08); margin-bottom:6px; font-size:12px; color:#6b7280; cursor:pointer; }
+.reply-banner { padding:6px 8px; background:#eef2ff; border-radius:6px; margin-bottom:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center; }
+.reply-banner button { background:transparent; border:none; font-size:16px; }
+.mention-picker { position:absolute; bottom:130px; left:8px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:4px; z-index:20; max-height:200px; overflow:auto; }
+.mention-picker .row { padding:6px 12px; cursor:pointer; min-width:140px; }
+.mention-picker .row:hover { background:#f3f4f6; }

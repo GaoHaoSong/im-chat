@@ -274,15 +274,18 @@ const app = createApp({
       if (!text || !state.activeChat || !ws || ws.readyState !== 1) return;
       const temp_id = "t" + Date.now() + Math.random();
       const peer = state.activeChat;
+      const mentions = extractMentions(text);
+      const reply_to_id = replyTo.value ? replyTo.value.id : null;
       const local = {
         temp_id, id: null, from_user: state.currentUser.username, to_user: peer,
         kind: "text", content: text, created_at: Math.floor(Date.now()/1000),
-        reply_to_id: null, mentions: [], recalled: false, status: "sending",
+        reply_to_id, mentions, recalled: false, status: "sending",
       };
       if (!state.messages[peer]) state.messages[peer] = [];
       state.messages[peer].push(local);
-      ws.send(JSON.stringify({ type: "send", to: peer, kind: "text", content: text, temp_id }));
+      ws.send(JSON.stringify({ type: "send", to: peer, kind: "text", content: text, temp_id, mentions, reply_to_id }));
       state.input = "";
+      replyTo.value = null;
       nextTick(scrollChatToBottom);
     }
 
@@ -396,9 +399,7 @@ const app = createApp({
     let longPressTimer = null;
 
     function openCtxMenu(e, m) {
-      if (m.from_user !== state.currentUser.username) return;
       if (!m.id) return;
-      if (Math.floor(Date.now()/1000) - m.created_at > 120) return;
       e.preventDefault();
       ctxMenu.visible = true;
       ctxMenu.x = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
@@ -419,6 +420,84 @@ const app = createApp({
 
     window.addEventListener("click", () => { if (ctxMenu.visible) closeCtxMenu(); });
 
+    const replyTo = ref(null);
+    const mentionPicker = reactive({ visible: false, query: "" });
+
+    function startReply(m) { replyTo.value = { id: m.id, content: m.content, from_user: m.from_user, kind: m.kind }; }
+    function cancelReply() { replyTo.value = null; }
+
+    function quoteSummary(m) {
+      if (!m) return "";
+      if (m.kind === "text") return (m.content || "").slice(0, 40);
+      if (m.kind === "image") return "[图片]";
+      if (m.kind === "file") return "[文件]";
+      return "";
+    }
+
+    function lookupQuoted(messageId) {
+      if (!state.activeChat) return null;
+      const list = state.messages[state.activeChat] || [];
+      return list.find(x => x.id === messageId);
+    }
+
+    function onInputChange(e) {
+      const val = e.target.value;
+      state.input = val;
+      const caret = e.target.selectionStart;
+      const before = val.slice(0, caret);
+      const m = before.match(/@([A-Za-z0-9_]*)$/);
+      if (m) {
+        mentionPicker.visible = true;
+        mentionPicker.query = m[1];
+      } else {
+        mentionPicker.visible = false;
+      }
+    }
+
+    function pickMention(u) {
+      const re = /@([A-Za-z0-9_]*)$/;
+      state.input = state.input.replace(re, `@${u.username} `);
+      mentionPicker.visible = false;
+    }
+
+    const mentionCandidates = computed(() => {
+      const q = mentionPicker.query.toLowerCase();
+      return state.users
+        .filter(u => u.username !== state.currentUser?.username)
+        .filter(u => u.username.toLowerCase().startsWith(q));
+    });
+
+    function extractMentions(text) {
+      const set = new Set();
+      const re = /@([A-Za-z0-9_]{3,20})\b/g;
+      let m;
+      while ((m = re.exec(text)) !== null) set.add(m[1]);
+      return [...set];
+    }
+
+    function renderTextWithMentions(text) {
+      const parts = [];
+      const re = /@([A-Za-z0-9_]{3,20})\b/g;
+      let last = 0, m;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > last) parts.push({ type: "text", value: text.slice(last, m.index) });
+        parts.push({ type: "mention", value: m[0] });
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) parts.push({ type: "text", value: text.slice(last) });
+      return parts;
+    }
+
+    function doReplyFromCtx() {
+      const m = lookupQuoted(ctxMenu.msgId);
+      if (m) startReply(m);
+      closeCtxMenu();
+    }
+    const ctxMenuCanRecall = computed(() => {
+      const m = lookupQuoted(ctxMenu.msgId);
+      return m && m.from_user === state.currentUser?.username && Math.floor(Date.now()/1000) - m.created_at <= 120;
+    });
+
     onMounted(tryAutoLogin);
 
     return {
@@ -431,6 +510,9 @@ const app = createApp({
       imageInput, fileInput, pickAndSendFile, onFileChosen, fileMeta, humanSize, fileUrl, previewImage,
       loadingMore, hasMore, loadMore, onMessagesScroll,
       ctxMenu, openCtxMenu, doRecall, onMsgTouchStart, onMsgTouchEnd,
+      replyTo, startReply, cancelReply, quoteSummary, lookupQuoted,
+      onInputChange, mentionPicker, pickMention, mentionCandidates, renderTextWithMentions,
+      doReplyFromCtx, ctxMenuCanRecall,
     };
   },
   template: `
@@ -511,7 +593,15 @@ const app = createApp({
                   <div class="bubble">
                     <span v-if="m.recalled" class="recalled">该消息已撤回</span>
                     <template v-else>
-                      <template v-if="m.kind === 'text'">{{ m.content }}</template>
+                      <template v-if="m.kind === 'text'">
+                        <div v-if="m.reply_to_id" class="reply-quote" @click.stop>
+                          引用：{{ quoteSummary(lookupQuoted(m.reply_to_id)) || '(消息不可见)' }}
+                        </div>
+                        <span v-for="(p, i) in renderTextWithMentions(m.content)" :key="i">
+                          <span v-if="p.type === 'mention'" class="mention">{{ p.value }}</span>
+                          <span v-else>{{ p.value }}</span>
+                        </span>
+                      </template>
                       <template v-else-if="m.kind === 'image'">
                         <img v-if="fileMeta(m.content)" class="preview" :src="fileUrl(fileMeta(m.content))" @click="previewImage = fileUrl(fileMeta(m.content))">
                       </template>
@@ -538,8 +628,15 @@ const app = createApp({
               <div v-if="showEmoji" class="emoji-panel">
                 <span v-for="e in EMOJIS" :key="e" @click="insertEmoji(e)">{{ e }}</span>
               </div>
+              <div v-if="mentionPicker.visible && mentionCandidates.length" class="mention-picker">
+                <div v-for="u in mentionCandidates" :key="u.username" class="row" @click="pickMention(u)">@{{ u.username }} <small style="color:#9ca3af">{{ u.display_name }}</small></div>
+              </div>
+              <div v-if="replyTo" class="reply-banner">
+                <span>引用：{{ quoteSummary(replyTo) }}</span>
+                <button @click="cancelReply">✕</button>
+              </div>
               <div class="input-row">
-                <textarea v-model="state.input" @keydown="onInputKeydown" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"></textarea>
+                <textarea :value="state.input" @input="onInputChange" @keydown="onInputKeydown" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"></textarea>
                 <button class="send-btn" @click="sendText">发送</button>
               </div>
             </div>
@@ -553,7 +650,8 @@ const app = createApp({
     </div>
 
     <div v-if="ctxMenu.visible" class="context-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
-      <button @click="doRecall">撤回</button>
+      <button @click="doReplyFromCtx">引用回复</button>
+      <button v-if="ctxMenuCanRecall" @click="doRecall">撤回</button>
     </div>
   `,
 });
