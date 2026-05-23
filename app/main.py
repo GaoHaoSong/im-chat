@@ -38,6 +38,9 @@ from app.auth import router as auth_router
 
 app.include_router(auth_router)
 
+from app.users import router as users_router
+app.include_router(users_router)
+
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
