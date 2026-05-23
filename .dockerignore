@@ -1,0 +1,22 @@
+# 不打入镜像的内容
+.git
+.gitignore
+.gitattributes
+.github
+.idea
+.vscode
+.claude
+__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+data
+*.db
+docs
+tests
+README.md
+Dockerfile
+.dockerignore
+docker-compose.yml
+.DS_Store

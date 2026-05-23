@@ -13,12 +13,42 @@
 
 ## 启动
 
+### 方式一：本地 Python
+
 ```bash
 pip install -r requirements.txt
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+### 方式二：Docker Compose（推荐）
+
+```bash
+docker compose up -d --build
+```
+
+停止：
+
+```bash
+docker compose down
+```
+
+### 方式三：纯 Docker
+
+```bash
+docker build -t im-chat .
+docker run -d --name im-chat -p 8000:8000 -v "$(pwd)/data:/app/data" --restart unless-stopped im-chat
+```
+
 浏览器访问 http://localhost:8000，局域网内其他设备访问 http://<你的IP>:8000。
+
+### 数据持久化
+
+宿主机 `./data/` 挂载到容器 `/app/data/`：
+
+- `im.db` SQLite 数据库
+- `uploads/` 上传的图片和文件
+
+容器删了重建不会丢数据；升级版本只需重新 `docker compose up -d --build`，schema 自动迁移。
 
 ## 测试
 

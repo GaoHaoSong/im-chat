@@ -1,0 +1,10 @@
+services:
+  im-chat:
+    build: .
+    image: im-chat:latest
+    container_name: im-chat
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
