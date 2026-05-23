@@ -67,3 +67,12 @@ input, textarea { font-family: inherit; }
 .emoji-panel span { font-size:20px; cursor:pointer; text-align:center; line-height:28px; }
 .emoji-panel span:hover { background:#f3f4f6; border-radius:4px; }
 .chat-panel { position:relative; }
+
+.bubble img.preview { max-width:240px; max-height:240px; border-radius:6px; display:block; cursor:zoom-in; }
+.bubble .file-card { display:flex; align-items:center; gap:8px; padding:6px; background:rgba(255,255,255,0.15); border-radius:6px; text-decoration:none; color:inherit; }
+.msg:not(.mine) .bubble .file-card { background:#f3f4f6; }
+.bubble .file-card .icon { font-size:24px; }
+.bubble .file-card .info { display:flex; flex-direction:column; }
+.bubble .file-card .info small { color:#6b7280; }
+.image-modal { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:100; cursor:zoom-out; }
+.image-modal img { max-width:90vw; max-height:90vh; }

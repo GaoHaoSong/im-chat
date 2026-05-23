@@ -43,3 +43,23 @@ async def test_upload_unauthorized(client):
     files = {"file": ("hello.txt", b"world", "text/plain")}
     r = await client.post("/api/upload", files=files)
     assert r.status_code == 401
+
+
+async def test_download_with_query_token(client):
+    token = await _register(client, "alice")
+    files = {"file": ("hi.txt", b"x", "text/plain")}
+    meta = (await client.post("/api/upload", files=files, headers={"Authorization": f"Bearer {token}"})).json()
+    fid = meta["file_id"]
+    # Use ?token= instead of header
+    r = await client.get(f"/api/files/{fid}?token={token}")
+    assert r.status_code == 200
+    assert r.content == b"x"
+
+
+async def test_download_invalid_token_query(client):
+    token = await _register(client, "alice")
+    files = {"file": ("hi.txt", b"x", "text/plain")}
+    meta = (await client.post("/api/upload", files=files, headers={"Authorization": f"Bearer {token}"})).json()
+    fid = meta["file_id"]
+    r = await client.get(f"/api/files/{fid}?token=bad")
+    assert r.status_code == 401

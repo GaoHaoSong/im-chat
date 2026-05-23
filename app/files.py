@@ -1,7 +1,7 @@
 import time
 import uuid
 from pathlib import Path
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Header
 from fastapi.responses import FileResponse
 
 from app import config
@@ -45,8 +45,25 @@ async def upload(file: UploadFile = File(...), me: str = Depends(current_user)):
 
 
 @router.get("/files/{file_id}")
-async def download(file_id: str, me: str = Depends(current_user)):
+async def download(
+    file_id: str,
+    token: str | None = None,
+    authorization: str | None = Header(default=None),
+):
+    # Resolve authentication: query param OR Authorization header
+    resolved_token = None
+    if token:
+        resolved_token = token
+    elif authorization and authorization.startswith("Bearer "):
+        resolved_token = authorization.split(" ", 1)[1]
+    if not resolved_token:
+        _err("unauthorized", "缺少 token", 401)
     conn = await get_conn()
+    sess = await (await conn.execute(
+        "SELECT 1 FROM sessions WHERE token=?", (resolved_token,)
+    )).fetchone()
+    if not sess:
+        _err("unauthorized", "token 无效", 401)
     row = await (await conn.execute(
         "SELECT original_name, mime FROM files WHERE file_id=?", (file_id,)
     )).fetchone()

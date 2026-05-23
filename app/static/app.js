@@ -315,6 +315,56 @@ const app = createApp({
       showEmoji.value = false;
     }
 
+    const imageInput = ref(null);
+    const fileInput = ref(null);
+    const previewImage = ref(null);
+
+    function pickAndSendFile(kind) {
+      const input = kind === "image" ? imageInput.value : fileInput.value;
+      if (!input) return;
+      input.click();
+    }
+
+    async function onFileChosen(e, kind) {
+      const file = e.target.files[0];
+      if (!file) return;
+      e.target.value = "";
+      try {
+        const meta = await API.upload(file, state.token);
+        sendMedia(kind, meta);
+      } catch (err) {
+        setBanner(`上传失败: ${err.message}`, "error");
+      }
+    }
+
+    function sendMedia(kind, meta) {
+      if (!state.activeChat || !ws || ws.readyState !== 1) return;
+      const temp_id = "t" + Date.now() + Math.random();
+      const peer = state.activeChat;
+      const content = JSON.stringify(meta);
+      const local = {
+        temp_id, id: null, from_user: state.currentUser.username, to_user: peer,
+        kind, content, created_at: Math.floor(Date.now()/1000),
+        reply_to_id: null, mentions: [], recalled: false, status: "sending",
+      };
+      if (!state.messages[peer]) state.messages[peer] = [];
+      state.messages[peer].push(local);
+      ws.send(JSON.stringify({ type: "send", to: peer, kind, content, temp_id }));
+      nextTick(scrollChatToBottom);
+    }
+
+    function fileMeta(content) {
+      try { return JSON.parse(content); } catch { return null; }
+    }
+
+    function humanSize(n) {
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      return (n / 1024 / 1024).toFixed(1) + " MB";
+    }
+
+    function fileUrl(meta) { return `/api/files/${meta.file_id}?token=${encodeURIComponent(state.token)}`; }
+
     onMounted(tryAutoLogin);
 
     return {
@@ -324,6 +374,7 @@ const app = createApp({
       formatTime, shouldShowDivider, dividerLabel, sendText, onInputKeydown,
       activePeerObj, activeMessages, isMobile,
       EMOJIS, showEmoji, insertEmoji,
+      imageInput, fileInput, pickAndSendFile, onFileChosen, fileMeta, humanSize, fileUrl, previewImage,
     };
   },
   template: `
@@ -398,7 +449,18 @@ const app = createApp({
                   <div class="avatar">{{ avatarInitial(m.from_user) }}</div>
                   <div class="bubble">
                     <span v-if="m.recalled" class="recalled">该消息已撤回</span>
-                    <template v-else>{{ m.content }}</template>
+                    <template v-else>
+                      <template v-if="m.kind === 'text'">{{ m.content }}</template>
+                      <template v-else-if="m.kind === 'image'">
+                        <img v-if="fileMeta(m.content)" class="preview" :src="fileUrl(fileMeta(m.content))" @click="previewImage = fileUrl(fileMeta(m.content))">
+                      </template>
+                      <template v-else-if="m.kind === 'file'">
+                        <a v-if="fileMeta(m.content)" class="file-card" :href="fileUrl(fileMeta(m.content))" :download="fileMeta(m.content).name">
+                          <div class="icon">📁</div>
+                          <div class="info"><span>{{ fileMeta(m.content).name }}</span><small>{{ humanSize(fileMeta(m.content).size) }}</small></div>
+                        </a>
+                      </template>
+                    </template>
                     <div class="meta">{{ formatTime(m.created_at) }} <span v-if="m.status === 'sending'">·发送中</span></div>
                   </div>
                 </div>
@@ -407,8 +469,10 @@ const app = createApp({
             <div class="input-area">
               <div class="tools">
                 <button title="表情" @click="showEmoji = !showEmoji">😀</button>
-                <button title="图片">📎</button>
-                <button title="文件">📁</button>
+                <button title="图片" @click="pickAndSendFile('image')">📎</button>
+                <button title="文件" @click="pickAndSendFile('file')">📁</button>
+                <input ref="imageInput" type="file" accept="image/*" style="display:none" @change="onFileChosen($event, 'image')">
+                <input ref="fileInput" type="file" style="display:none" @change="onFileChosen($event, 'file')">
               </div>
               <div v-if="showEmoji" class="emoji-panel">
                 <span v-for="e in EMOJIS" :key="e" @click="insertEmoji(e)">{{ e }}</span>
@@ -421,6 +485,10 @@ const app = createApp({
           </template>
         </div>
       </div>
+    </div>
+
+    <div v-if="previewImage" class="image-modal" @click="previewImage = null">
+      <img :src="previewImage">
     </div>
   `,
 });
