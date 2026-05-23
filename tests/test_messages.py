@@ -73,3 +73,56 @@ async def test_mark_read_clears_unread(client):
     r2 = await client.get("/api/users", headers={"Authorization": f"Bearer {tb}"})
     bob_view2 = {u["username"]: u for u in r2.json()["users"]}
     assert bob_view2["alice"]["unread"] == 0
+
+
+def test_recall_within_window(isolated_db):
+    from app.main import app
+    with TestClient(app) as c:
+        ta = c.post("/api/register", json={"username": "alice", "pin": "1234", "display_name": "A"}).json()["token"]
+        tb = c.post("/api/register", json={"username": "bob", "pin": "1234", "display_name": "B"}).json()["token"]
+        with c.websocket_connect(f"/ws?token={ta}") as ws_a, c.websocket_connect(f"/ws?token={tb}") as ws_b:
+            ws_a.receive_json()
+            ws_a.send_json({"type": "send", "to": "bob", "kind": "text", "content": "oops"})
+            sent = ws_a.receive_json()
+            ws_b.receive_json()
+            msg_id = sent["message"]["id"]
+            ws_a.send_json({"type": "recall", "message_id": msg_id})
+            res_a = ws_a.receive_json()
+            res_b = ws_b.receive_json()
+            assert res_a["type"] == "recalled"
+            assert res_a["message_id"] == msg_id
+            assert res_b["type"] == "recalled"
+
+
+def test_recall_not_owner(isolated_db):
+    from app.main import app
+    with TestClient(app) as c:
+        ta = c.post("/api/register", json={"username": "alice", "pin": "1234", "display_name": "A"}).json()["token"]
+        tb = c.post("/api/register", json={"username": "bob", "pin": "1234", "display_name": "B"}).json()["token"]
+        with c.websocket_connect(f"/ws?token={ta}") as ws_a, c.websocket_connect(f"/ws?token={tb}") as ws_b:
+            ws_a.receive_json()
+            ws_a.send_json({"type": "send", "to": "bob", "kind": "text", "content": "x"})
+            sent = ws_a.receive_json()
+            ws_b.receive_json()
+            ws_b.send_json({"type": "recall", "message_id": sent["message"]["id"]})
+            res = ws_b.receive_json()
+            assert res["type"] == "error"
+            assert res["code"] == "forbidden"
+
+
+def test_recall_expired(isolated_db, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "RECALL_WINDOW_SECONDS", 0)
+    from app.main import app
+    with TestClient(app) as c:
+        ta = c.post("/api/register", json={"username": "alice", "pin": "1234", "display_name": "A"}).json()["token"]
+        c.post("/api/register", json={"username": "bob", "pin": "1234", "display_name": "B"})
+        with c.websocket_connect(f"/ws?token={ta}") as ws_a:
+            ws_a.send_json({"type": "send", "to": "bob", "kind": "text", "content": "x"})
+            sent = ws_a.receive_json()
+            import time as t
+            t.sleep(1)
+            ws_a.send_json({"type": "recall", "message_id": sent["message"]["id"]})
+            res = ws_a.receive_json()
+            assert res["type"] == "error"
+            assert res["code"] == "recall_expired"

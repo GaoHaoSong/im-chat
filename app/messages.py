@@ -71,7 +71,34 @@ async def handle_send(username: str, msg: dict, websocket):
 
 
 async def handle_recall(username: str, msg: dict, websocket):
-    pass  # implemented in Task 10
+    from app import config
+    message_id = msg.get("message_id")
+    if not isinstance(message_id, int):
+        await websocket.send_json({"type": "error", "code": "bad_payload", "message": "message_id 必须为整数"})
+        return
+    conn = await get_conn()
+    row = await (await conn.execute(
+        "SELECT from_user, to_user, created_at, recalled FROM messages WHERE id=?", (message_id,)
+    )).fetchone()
+    if not row:
+        await websocket.send_json({"type": "error", "code": "not_found", "message": "消息不存在"})
+        return
+    if row["from_user"] != username:
+        await websocket.send_json({"type": "error", "code": "forbidden", "message": "只能撤回自己的消息"})
+        return
+    if row["recalled"]:
+        await websocket.send_json({"type": "error", "code": "already_recalled", "message": "已撤回"})
+        return
+    if int(time.time()) - row["created_at"] > config.RECALL_WINDOW_SECONDS:
+        await websocket.send_json({"type": "error", "code": "recall_expired", "message": "超过撤回时限"})
+        return
+    async with db_write_lock:
+        await conn.execute("UPDATE messages SET recalled=1 WHERE id=?", (message_id,))
+        await conn.commit()
+    payload = {"type": "recalled", "message_id": message_id, "by": username}
+    await manager.send_to(username, payload)
+    if row["to_user"] != username:
+        await manager.send_to(row["to_user"], payload)
 
 
 class ReadRequest(BaseModel):
