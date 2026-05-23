@@ -299,6 +299,22 @@ const app = createApp({
     const isMobile = ref(window.matchMedia("(max-width: 768px)").matches);
     window.matchMedia("(max-width: 768px)").addEventListener("change", e => { isMobile.value = e.matches; });
 
+    const EMOJIS = [
+      "😀","😁","😂","🤣","😅","😊","😍","😘","😎","🤔",
+      "😢","😭","😡","😱","😴","🤤","🤗","🤐","🙄","😏",
+      "👍","👎","👌","✌️","🤝","🙏","💪","👀","👋","🤙",
+      "❤️","💔","💕","💖","💗","💘","💞","🌹","🌸","🎉",
+      "🔥","✨","⭐","🌟","💯","✅","❌","⚠️","❓","❗",
+      "🐶","🐱","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷",
+      "🍎","🍔","🍕","🍰","🍻","☕","🍵","🍜","🍦","🍓",
+      "⚽","🏀","🎮","🎵","📷","🎬","🚀","✈️","🚗","🏠",
+    ];
+    const showEmoji = ref(false);
+    function insertEmoji(e) {
+      state.input += e;
+      showEmoji.value = false;
+    }
+
     onMounted(tryAutoLogin);
 
     return {
@@ -307,6 +323,7 @@ const app = createApp({
       showGearMenu, doLogout, lastSeenText,
       formatTime, shouldShowDivider, dividerLabel, sendText, onInputKeydown,
       activePeerObj, activeMessages, isMobile,
+      EMOJIS, showEmoji, insertEmoji,
     };
   },
   template: `
@@ -389,9 +406,12 @@ const app = createApp({
             </div>
             <div class="input-area">
               <div class="tools">
-                <button title="表情">😀</button>
+                <button title="表情" @click="showEmoji = !showEmoji">😀</button>
                 <button title="图片">📎</button>
                 <button title="文件">📁</button>
+              </div>
+              <div v-if="showEmoji" class="emoji-panel">
+                <span v-for="e in EMOJIS" :key="e" @click="insertEmoji(e)">{{ e }}</span>
               </div>
               <div class="input-row">
                 <textarea v-model="state.input" @keydown="onInputKeydown" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"></textarea>

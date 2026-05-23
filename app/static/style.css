@@ -63,3 +63,7 @@ input, textarea { font-family: inherit; }
 .input-row { display:flex; gap:8px; align-items:flex-end; }
 .input-row textarea { flex:1; border:1px solid #e5e7eb; border-radius:8px; padding:8px; resize:none; min-height:40px; max-height:120px; }
 .input-row .send-btn { background:#3b82f6; color:#fff; border:none; padding:0 18px; border-radius:8px; min-height:40px; }
+.emoji-panel { position:absolute; bottom:120px; left:8px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:8px; box-shadow:0 4px 12px rgba(0,0,0,.08); display:grid; grid-template-columns: repeat(10, 28px); gap:4px; max-width:340px; z-index:20; }
+.emoji-panel span { font-size:20px; cursor:pointer; text-align:center; line-height:28px; }
+.emoji-panel span:hover { background:#f3f4f6; border-radius:4px; }
+.chat-panel { position:relative; }
