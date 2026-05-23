@@ -42,6 +42,20 @@ async def register(req: RegisterRequest):
     return {"token": token}
 
 
+@router.post("/login")
+async def login(req: LoginRequest):
+    conn = await get_conn()
+    row = await (await conn.execute(
+        "SELECT pin_hash FROM users WHERE username=?", (req.username,)
+    )).fetchone()
+    if not row:
+        _err("invalid_credentials", "用户名或 PIN 错误", 401)
+    if not bcrypt.checkpw(req.pin.encode(), row["pin_hash"].encode()):
+        _err("invalid_credentials", "用户名或 PIN 错误", 401)
+    token = await _create_session(req.username)
+    return {"token": token}
+
+
 async def current_user(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         _err("unauthorized", "缺少 token", 401)
