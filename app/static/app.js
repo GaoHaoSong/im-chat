@@ -498,6 +498,16 @@ const app = createApp({
       return m && m.from_user === state.currentUser?.username && Math.floor(Date.now()/1000) - m.created_at <= 120;
     });
 
+    function setupViewport() {
+      if (!window.visualViewport) return;
+      const update = () => {
+        document.documentElement.style.setProperty("--vh", `${window.visualViewport.height}px`);
+      };
+      window.visualViewport.addEventListener("resize", update);
+      update();
+    }
+    onMounted(setupViewport);
+
     onMounted(tryAutoLogin);
 
     return {
@@ -532,7 +542,7 @@ const app = createApp({
       </div>
     </div>
 
-    <div v-else style="display:flex;flex-direction:column;height:100dvh">
+    <div v-else style="display:flex;flex-direction:column;height:100%">
       <div v-if="state.banner" :class="['banner', state.bannerKind]">{{ state.banner }}</div>
       <div class="main" style="flex:1;min-height:0">
         <div class="sidebar" v-show="state.mobileView === 'list'" style="position:relative">

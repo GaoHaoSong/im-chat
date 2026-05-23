@@ -87,3 +87,25 @@ input, textarea { font-family: inherit; }
 .mention-picker { position:absolute; bottom:130px; left:8px; background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:4px; z-index:20; max-height:200px; overflow:auto; }
 .mention-picker .row { padding:6px 12px; cursor:pointer; min-width:140px; }
 .mention-picker .row:hover { background:#f3f4f6; }
+
+@media (max-width: 768px) {
+  .main { grid-template-columns: 1fr; }
+  .sidebar { display:flex; }
+  .chat-panel .back { display:inline-block; }
+  .gear-menu { left:8px; right:auto; }
+  .emoji-panel { grid-template-columns: repeat(8, 32px); bottom:100px; }
+  .msg .bubble { max-width: 80%; }
+  .input-row textarea { font-size:16px; }
+}
+
+@supports (height: 100dvh) {
+  body, #app { height: 100dvh; }
+}
+@supports not (height: 100dvh) {
+  body, #app { height: 100vh; }
+}
+
+:root { --vh: 100dvh; }
+@media (max-width: 768px) {
+  body, #app { height: var(--vh); }
+}
