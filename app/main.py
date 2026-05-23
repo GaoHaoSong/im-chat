@@ -50,6 +50,9 @@ app.include_router(ws_router)
 from app.messages import router as messages_router
 app.include_router(messages_router)
 
+from app.profile import router as profile_router
+app.include_router(profile_router)
+
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):

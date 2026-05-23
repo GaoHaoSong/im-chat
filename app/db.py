@@ -26,7 +26,8 @@ async def init_db():
         display_name TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         last_seen_at INTEGER NOT NULL DEFAULT 0,
-        read_state TEXT NOT NULL DEFAULT '{}'
+        read_state TEXT NOT NULL DEFAULT '{}',
+        avatar TEXT NOT NULL DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,6 +59,13 @@ async def init_db():
     );
     """)
     await conn.commit()
+
+    # Migration: add avatar column to existing users tables that don't have it
+    cur = await conn.execute("PRAGMA table_info(users)")
+    cols = {r[1] for r in await cur.fetchall()}
+    if "avatar" not in cols:
+        await conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT NOT NULL DEFAULT ''")
+        await conn.commit()
 
 
 async def close_db():

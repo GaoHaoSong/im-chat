@@ -60,14 +60,14 @@ async def login(req: LoginRequest):
 async def auto_login(req: AutoLoginRequest):
     conn = await get_conn()
     row = await (await conn.execute(
-        """SELECT u.username, u.display_name
+        """SELECT u.username, u.display_name, u.avatar
            FROM sessions s JOIN users u ON s.username=u.username
            WHERE s.token=?""",
         (req.token,),
     )).fetchone()
     if not row:
         _err("unauthorized", "token 无效", 401)
-    return {"username": row["username"], "display_name": row["display_name"]}
+    return {"username": row["username"], "display_name": row["display_name"], "avatar": row["avatar"]}
 
 
 @router.post("/logout")

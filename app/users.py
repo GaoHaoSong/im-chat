@@ -16,7 +16,7 @@ def _is_online(username: str) -> bool:
 async def list_users(me: str = Depends(current_user)):
     conn = await get_conn()
     rows = await (await conn.execute(
-        "SELECT username, display_name, last_seen_at, read_state FROM users ORDER BY username"
+        "SELECT username, display_name, last_seen_at, read_state, avatar FROM users ORDER BY username"
     )).fetchall()
 
     my_row = await (await conn.execute(
@@ -42,5 +42,6 @@ async def list_users(me: str = Depends(current_user)):
             "online": _is_online(peer),
             "last_seen_at": r["last_seen_at"],
             "unread": unread,
+            "avatar": r["avatar"],
         })
     return {"users": result}
