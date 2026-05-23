@@ -56,6 +56,32 @@ async def login(req: LoginRequest):
     return {"token": token}
 
 
+@router.post("/auto_login")
+async def auto_login(req: AutoLoginRequest):
+    conn = await get_conn()
+    row = await (await conn.execute(
+        """SELECT u.username, u.display_name
+           FROM sessions s JOIN users u ON s.username=u.username
+           WHERE s.token=?""",
+        (req.token,),
+    )).fetchone()
+    if not row:
+        _err("unauthorized", "token 无效", 401)
+    return {"username": row["username"], "display_name": row["display_name"]}
+
+
+@router.post("/logout")
+async def logout(authorization: str | None = Header(default=None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        return {"ok": True}
+    token = authorization.split(" ", 1)[1]
+    conn = await get_conn()
+    async with db_write_lock:
+        await conn.execute("DELETE FROM sessions WHERE token=?", (token,))
+        await conn.commit()
+    return {"ok": True}
+
+
 async def current_user(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         _err("unauthorized", "缺少 token", 401)

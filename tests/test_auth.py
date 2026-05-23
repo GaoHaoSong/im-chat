@@ -56,3 +56,31 @@ async def test_login_wrong_pin(client):
 async def test_login_unknown_user(client):
     r = await client.post("/api/login", json={"username": "ghost", "pin": "1234"})
     assert r.status_code == 401
+
+
+async def test_auto_login_success(client):
+    r1 = await client.post("/api/register", json={
+        "username": "alice", "pin": "1234", "display_name": "Alice"
+    })
+    token = r1.json()["token"]
+    r = await client.post("/api/auto_login", json={"token": token})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["username"] == "alice"
+    assert body["display_name"] == "Alice"
+
+
+async def test_auto_login_invalid_token(client):
+    r = await client.post("/api/auto_login", json={"token": "deadbeef"})
+    assert r.status_code == 401
+
+
+async def test_logout_invalidates_token(client):
+    r1 = await client.post("/api/register", json={
+        "username": "alice", "pin": "1234", "display_name": "Alice"
+    })
+    token = r1.json()["token"]
+    r = await client.post("/api/logout", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 200
+    r2 = await client.post("/api/auto_login", json={"token": token})
+    assert r2.status_code == 401
