@@ -365,6 +365,33 @@ const app = createApp({
 
     function fileUrl(meta) { return `/api/files/${meta.file_id}?token=${encodeURIComponent(state.token)}`; }
 
+    const loadingMore = ref(false);
+    const hasMore = reactive({});
+
+    async function loadMore() {
+      const peer = state.activeChat;
+      if (!peer || loadingMore.value || hasMore[peer] === false) return;
+      const msgs = state.messages[peer] || [];
+      const earliest = msgs.find(m => m.id != null);
+      if (!earliest) return;
+      loadingMore.value = true;
+      try {
+        const data = await API.get(`/api/messages?peer=${encodeURIComponent(peer)}&before=${earliest.id}&limit=30`, state.token);
+        if (data.messages.length === 0) {
+          hasMore[peer] = false;
+        } else {
+          const old = data.messages.map(m => ({ ...m, status: "sent" }));
+          state.messages[peer] = [...old, ...msgs];
+        }
+      } finally {
+        loadingMore.value = false;
+      }
+    }
+
+    function onMessagesScroll(e) {
+      if (e.target.scrollTop < 40) loadMore();
+    }
+
     onMounted(tryAutoLogin);
 
     return {
@@ -375,6 +402,7 @@ const app = createApp({
       activePeerObj, activeMessages, isMobile,
       EMOJIS, showEmoji, insertEmoji,
       imageInput, fileInput, pickAndSendFile, onFileChosen, fileMeta, humanSize, fileUrl, previewImage,
+      loadingMore, hasMore, loadMore, onMessagesScroll,
     };
   },
   template: `
@@ -442,7 +470,8 @@ const app = createApp({
                 {{ activePeerObj?.online ? '在线' : '离线' }}
               </div>
             </div>
-            <div class="messages">
+            <div class="messages" @scroll="onMessagesScroll">
+              <div v-if="loadingMore" class="divider">加载中...</div>
               <template v-for="(m, idx) in activeMessages" :key="m.id || m.temp_id">
                 <div v-if="shouldShowDivider(activeMessages, idx)" class="divider">{{ dividerLabel(m.created_at) }}</div>
                 <div :class="['msg', { mine: m.from_user === state.currentUser.username }]">
