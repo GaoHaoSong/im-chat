@@ -249,12 +249,64 @@ const app = createApp({
       return `${Math.floor(diff/86400)} 天前`;
     }
 
+    function formatTime(ts) {
+      const d = new Date(ts * 1000);
+      return d.toLocaleString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function shouldShowDivider(messages, idx) {
+      if (idx === 0) return true;
+      return messages[idx].created_at - messages[idx-1].created_at > 300;
+    }
+
+    function dividerLabel(ts) {
+      const d = new Date(ts * 1000);
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      const yesterday = new Date(now.getTime() - 86400000).toDateString() === d.toDateString();
+      if (sameDay) return "今天 " + formatTime(ts);
+      if (yesterday) return "昨天 " + formatTime(ts);
+      return d.toLocaleDateString("zh-CN") + " " + formatTime(ts);
+    }
+
+    function sendText() {
+      const text = state.input.trim();
+      if (!text || !state.activeChat || !ws || ws.readyState !== 1) return;
+      const temp_id = "t" + Date.now() + Math.random();
+      const peer = state.activeChat;
+      const local = {
+        temp_id, id: null, from_user: state.currentUser.username, to_user: peer,
+        kind: "text", content: text, created_at: Math.floor(Date.now()/1000),
+        reply_to_id: null, mentions: [], recalled: false, status: "sending",
+      };
+      if (!state.messages[peer]) state.messages[peer] = [];
+      state.messages[peer].push(local);
+      ws.send(JSON.stringify({ type: "send", to: peer, kind: "text", content: text, temp_id }));
+      state.input = "";
+      nextTick(scrollChatToBottom);
+    }
+
+    function onInputKeydown(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendText();
+      }
+    }
+
+    const activePeerObj = computed(() => state.users.find(u => u.username === state.activeChat));
+    const activeMessages = computed(() => (state.activeChat && state.messages[state.activeChat]) || []);
+
+    const isMobile = ref(window.matchMedia("(max-width: 768px)").matches);
+    window.matchMedia("(max-width: 768px)").addEventListener("change", e => { isMobile.value = e.matches; });
+
     onMounted(tryAutoLogin);
 
     return {
       state, loginForm, submitLogin,
       onlineUsers, offlineUsers, avatarInitial, selectChat, backToList,
       showGearMenu, doLogout, lastSeenText,
+      formatTime, shouldShowDivider, dividerLabel, sendText, onInputKeydown,
+      activePeerObj, activeMessages, isMobile,
     };
   },
   template: `
@@ -311,7 +363,43 @@ const app = createApp({
             </template>
           </div>
         </div>
-        <div class="chat-panel"><div class="chat-empty">选择左侧用户开始聊天</div></div>
+        <div class="chat-panel" v-show="state.mobileView === 'chat' || !isMobile">
+          <div v-if="!state.activeChat" class="chat-empty">选择左侧用户开始聊天</div>
+          <template v-else>
+            <div class="chat-header">
+              <button class="back" @click="backToList">←</button>
+              <div class="peer-name">{{ activePeerObj?.display_name || state.activeChat }}</div>
+              <div class="peer-status">
+                <span :class="['dot', { online: activePeerObj?.online }]"></span>
+                {{ activePeerObj?.online ? '在线' : '离线' }}
+              </div>
+            </div>
+            <div class="messages">
+              <template v-for="(m, idx) in activeMessages" :key="m.id || m.temp_id">
+                <div v-if="shouldShowDivider(activeMessages, idx)" class="divider">{{ dividerLabel(m.created_at) }}</div>
+                <div :class="['msg', { mine: m.from_user === state.currentUser.username }]">
+                  <div class="avatar">{{ avatarInitial(m.from_user) }}</div>
+                  <div class="bubble">
+                    <span v-if="m.recalled" class="recalled">该消息已撤回</span>
+                    <template v-else>{{ m.content }}</template>
+                    <div class="meta">{{ formatTime(m.created_at) }} <span v-if="m.status === 'sending'">·发送中</span></div>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="input-area">
+              <div class="tools">
+                <button title="表情">😀</button>
+                <button title="图片">📎</button>
+                <button title="文件">📁</button>
+              </div>
+              <div class="input-row">
+                <textarea v-model="state.input" @keydown="onInputKeydown" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"></textarea>
+                <button class="send-btn" @click="sendText">发送</button>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
   `,
