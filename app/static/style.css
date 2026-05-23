@@ -76,3 +76,6 @@ input, textarea { font-family: inherit; }
 .bubble .file-card .info small { color:#6b7280; }
 .image-modal { position:fixed; inset:0; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:100; cursor:zoom-out; }
 .image-modal img { max-width:90vw; max-height:90vh; }
+.context-menu { position:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.08); z-index:50; }
+.context-menu button { display:block; padding:8px 16px; background:transparent; border:none; min-width:120px; text-align:left; }
+.context-menu button:hover { background:#f3f4f6; }

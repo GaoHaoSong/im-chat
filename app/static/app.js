@@ -392,6 +392,33 @@ const app = createApp({
       if (e.target.scrollTop < 40) loadMore();
     }
 
+    const ctxMenu = reactive({ visible: false, x: 0, y: 0, msgId: null });
+    let longPressTimer = null;
+
+    function openCtxMenu(e, m) {
+      if (m.from_user !== state.currentUser.username) return;
+      if (!m.id) return;
+      if (Math.floor(Date.now()/1000) - m.created_at > 120) return;
+      e.preventDefault();
+      ctxMenu.visible = true;
+      ctxMenu.x = e.clientX ?? (e.touches && e.touches[0].clientX) ?? 0;
+      ctxMenu.y = e.clientY ?? (e.touches && e.touches[0].clientY) ?? 0;
+      ctxMenu.msgId = m.id;
+    }
+    function closeCtxMenu() { ctxMenu.visible = false; }
+    function doRecall() {
+      if (!ctxMenu.msgId) return;
+      ws.send(JSON.stringify({ type: "recall", message_id: ctxMenu.msgId }));
+      closeCtxMenu();
+    }
+    function onMsgTouchStart(e, m) {
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => openCtxMenu(e, m), 500);
+    }
+    function onMsgTouchEnd() { clearTimeout(longPressTimer); }
+
+    window.addEventListener("click", () => { if (ctxMenu.visible) closeCtxMenu(); });
+
     onMounted(tryAutoLogin);
 
     return {
@@ -403,6 +430,7 @@ const app = createApp({
       EMOJIS, showEmoji, insertEmoji,
       imageInput, fileInput, pickAndSendFile, onFileChosen, fileMeta, humanSize, fileUrl, previewImage,
       loadingMore, hasMore, loadMore, onMessagesScroll,
+      ctxMenu, openCtxMenu, doRecall, onMsgTouchStart, onMsgTouchEnd,
     };
   },
   template: `
@@ -474,7 +502,11 @@ const app = createApp({
               <div v-if="loadingMore" class="divider">加载中...</div>
               <template v-for="(m, idx) in activeMessages" :key="m.id || m.temp_id">
                 <div v-if="shouldShowDivider(activeMessages, idx)" class="divider">{{ dividerLabel(m.created_at) }}</div>
-                <div :class="['msg', { mine: m.from_user === state.currentUser.username }]">
+                <div :class="['msg', { mine: m.from_user === state.currentUser.username }]"
+                     @contextmenu="openCtxMenu($event, m)"
+                     @touchstart="onMsgTouchStart($event, m)"
+                     @touchend="onMsgTouchEnd"
+                     @touchmove="onMsgTouchEnd">
                   <div class="avatar">{{ avatarInitial(m.from_user) }}</div>
                   <div class="bubble">
                     <span v-if="m.recalled" class="recalled">该消息已撤回</span>
@@ -518,6 +550,10 @@ const app = createApp({
 
     <div v-if="previewImage" class="image-modal" @click="previewImage = null">
       <img :src="previewImage">
+    </div>
+
+    <div v-if="ctxMenu.visible" class="context-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+      <button @click="doRecall">撤回</button>
     </div>
   `,
 });
