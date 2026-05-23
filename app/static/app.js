@@ -115,6 +115,20 @@ const app = createApp({
         onIncomingMessage(m);
       } else if (m.type === "recalled") {
         onRecalled(m);
+      } else if (m.type === "user_updated") {
+        const u = state.users.find(x => x.username === m.user.username);
+        if (u) {
+          u.display_name = m.user.display_name;
+          u.avatar = m.user.avatar;
+        }
+      } else if (m.type === "user_deleted") {
+        const idx = state.users.findIndex(x => x.username === m.username);
+        if (idx >= 0) state.users.splice(idx, 1);
+        if (state.activeChat === m.username) {
+          state.activeChat = null;
+        }
+        delete state.messages[m.username];
+        delete state.unread[m.username];
       } else if (m.type === "kicked") {
         kicked = true;
         setBanner("你已在其他设备登录", "error");
@@ -199,6 +213,164 @@ const app = createApp({
     }
 
     const showGearMenu = ref(false);
+
+    // 头像 emoji 选项
+    const AVATAR_EMOJIS = [
+      "😀","😎","🤓","🧑","👨","👩","🧔","🦊","🐱","🐶",
+      "🐼","🐯","🦁","🐸","🐧","🦄","🌟","🌸","🌈","🎉",
+    ];
+
+    // 账号设置模态框
+    const settingsModal = reactive({
+      visible: false,
+      tab: "profile", // profile | pin
+      // profile
+      display_name: "",
+      avatar: "",
+      profileError: "",
+      profileSaving: false,
+      // PIN
+      currentPin: "",
+      newPin: "",
+      confirmPin: "",
+      pinError: "",
+      pinSaving: false,
+      pinSuccess: false,
+    });
+
+    function openSettings() {
+      settingsModal.visible = true;
+      settingsModal.tab = "profile";
+      settingsModal.display_name = state.currentUser?.display_name || "";
+      settingsModal.avatar = state.currentUser?.avatar || "";
+      settingsModal.profileError = "";
+      settingsModal.currentPin = "";
+      settingsModal.newPin = "";
+      settingsModal.confirmPin = "";
+      settingsModal.pinError = "";
+      settingsModal.pinSuccess = false;
+      showGearMenu.value = false;
+    }
+    function closeSettings() { settingsModal.visible = false; }
+
+    async function saveProfile() {
+      settingsModal.profileError = "";
+      settingsModal.profileSaving = true;
+      try {
+        const body = {};
+        if (settingsModal.display_name && settingsModal.display_name !== state.currentUser.display_name) {
+          body.display_name = settingsModal.display_name;
+        }
+        if (settingsModal.avatar !== state.currentUser.avatar) {
+          body.avatar = settingsModal.avatar;
+        }
+        if (Object.keys(body).length === 0) {
+          settingsModal.profileError = "没有变化";
+          return;
+        }
+        const data = await API.post("/api/me/profile", body, state.token);
+        state.currentUser.display_name = data.user.display_name;
+        state.currentUser.avatar = data.user.avatar;
+        // Update self in users list as well
+        const meInList = state.users.find(u => u.username === state.currentUser.username);
+        if (meInList) {
+          meInList.display_name = data.user.display_name;
+          meInList.avatar = data.user.avatar;
+        }
+        closeSettings();
+      } catch (e) {
+        settingsModal.profileError = e.message;
+      } finally {
+        settingsModal.profileSaving = false;
+      }
+    }
+
+    async function savePin() {
+      settingsModal.pinError = "";
+      settingsModal.pinSuccess = false;
+      if (!/^[0-9]{4,6}$/.test(settingsModal.newPin)) {
+        settingsModal.pinError = "新 PIN 必须 4-6 位数字";
+        return;
+      }
+      if (settingsModal.newPin !== settingsModal.confirmPin) {
+        settingsModal.pinError = "两次输入的新 PIN 不一致";
+        return;
+      }
+      settingsModal.pinSaving = true;
+      try {
+        await API.post("/api/me/pin", {
+          current_pin: settingsModal.currentPin,
+          new_pin: settingsModal.newPin,
+        }, state.token);
+        settingsModal.pinSuccess = true;
+        settingsModal.currentPin = "";
+        settingsModal.newPin = "";
+        settingsModal.confirmPin = "";
+      } catch (e) {
+        settingsModal.pinError = e.message;
+      } finally {
+        settingsModal.pinSaving = false;
+      }
+    }
+
+    // 注销账号模态框
+    const deleteModal = reactive({
+      visible: false,
+      pin: "",
+      error: "",
+      submitting: false,
+    });
+    function openDeleteAccount() {
+      deleteModal.visible = true;
+      deleteModal.pin = "";
+      deleteModal.error = "";
+      showGearMenu.value = false;
+    }
+    function closeDeleteAccount() { deleteModal.visible = false; }
+    async function confirmDelete() {
+      deleteModal.error = "";
+      deleteModal.submitting = true;
+      try {
+        const r = await fetch("/api/me", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${state.token}`,
+          },
+          body: JSON.stringify({ pin: deleteModal.pin }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error?.message || r.statusText);
+        // Same cleanup as logout, but bypass /api/logout call (account is gone)
+        localStorage.removeItem("token");
+        try { ws && ws.close(); } catch {}
+        kicked = true;
+        state.token = "";
+        state.currentUser = null;
+        state.users = [];
+        state.messages = {};
+        state.unread = {};
+        state.activeChat = null;
+        deleteModal.visible = false;
+        state.view = "login";
+      } catch (e) {
+        deleteModal.error = e.message;
+      } finally {
+        deleteModal.submitting = false;
+      }
+    }
+
+    // 头像渲染辅助：如果 user 有 avatar emoji 用 emoji，否则用首字母
+    function avatarContent(user) {
+      if (user && user.avatar) return user.avatar;
+      return avatarInitial(user?.display_name || user?.username);
+    }
+
+    function avatarByUsername(username) {
+      const u = state.users.find(x => x.username === username);
+      if (u) return avatarContent(u);
+      return avatarInitial(username);
+    }
 
     const onlineUsers = computed(() => state.users.filter(u => u.online && u.username !== state.currentUser?.username));
     const offlineUsers = computed(() => state.users.filter(u => !u.online && u.username !== state.currentUser?.username));
@@ -428,6 +600,7 @@ const app = createApp({
 
     function quoteSummary(m) {
       if (!m) return "";
+      if (m.recalled) return "[已撤回]";
       if (m.kind === "text") return (m.content || "").slice(0, 40);
       if (m.kind === "image") return "[图片]";
       if (m.kind === "file") return "[文件]";
@@ -490,12 +663,16 @@ const app = createApp({
 
     function doReplyFromCtx() {
       const m = lookupQuoted(ctxMenu.msgId);
-      if (m) startReply(m);
+      if (m && !m.recalled) startReply(m);
       closeCtxMenu();
     }
+    const ctxMenuCanReply = computed(() => {
+      const m = lookupQuoted(ctxMenu.msgId);
+      return m && !m.recalled;
+    });
     const ctxMenuCanRecall = computed(() => {
       const m = lookupQuoted(ctxMenu.msgId);
-      return m && m.from_user === state.currentUser?.username && Math.floor(Date.now()/1000) - m.created_at <= 120;
+      return m && !m.recalled && m.from_user === state.currentUser?.username && Math.floor(Date.now()/1000) - m.created_at <= 120;
     });
 
     function setupViewport() {
@@ -522,7 +699,10 @@ const app = createApp({
       ctxMenu, openCtxMenu, doRecall, onMsgTouchStart, onMsgTouchEnd,
       replyTo, startReply, cancelReply, quoteSummary, lookupQuoted,
       onInputChange, mentionPicker, pickMention, mentionCandidates, renderTextWithMentions,
-      doReplyFromCtx, ctxMenuCanRecall,
+      doReplyFromCtx, ctxMenuCanReply, ctxMenuCanRecall,
+      AVATAR_EMOJIS, settingsModal, openSettings, closeSettings, saveProfile, savePin,
+      deleteModal, openDeleteAccount, closeDeleteAccount, confirmDelete,
+      avatarContent, avatarByUsername,
     };
   },
   template: `
@@ -545,13 +725,16 @@ const app = createApp({
     <div v-else style="display:flex;flex-direction:column;height:100%">
       <div v-if="state.banner" :class="['banner', state.bannerKind]">{{ state.banner }}</div>
       <div class="main" style="flex:1;min-height:0">
-        <div class="sidebar" v-show="state.mobileView === 'list'" style="position:relative">
+        <div class="sidebar" v-show="!isMobile || state.mobileView === 'list'" style="position:relative">
           <div class="me-row">
-            <div class="avatar">{{ avatarInitial(state.currentUser.display_name) }}</div>
+            <div class="avatar">{{ avatarContent(state.currentUser) }}</div>
             <div class="name">{{ state.currentUser.display_name }}</div>
             <button class="gear" @click="showGearMenu = !showGearMenu">⚙</button>
           </div>
           <div v-if="showGearMenu" class="gear-menu">
+            <button @click="openSettings">账号设置</button>
+            <button class="danger" @click="openDeleteAccount">注销账号</button>
+            <div class="menu-divider"></div>
             <button @click="doLogout">退出登录</button>
           </div>
           <div class="user-list">
@@ -560,7 +743,7 @@ const app = createApp({
             </div>
             <template v-if="!state.collapseOnline">
               <div v-for="u in onlineUsers" :key="u.username" :class="['user-row', { active: state.activeChat === u.username }]" @click="selectChat(u.username)">
-                <div class="avatar">{{ avatarInitial(u.display_name) }}</div>
+                <div class="avatar">{{ avatarContent(u) }}</div>
                 <span class="dot online"></span>
                 <span class="name">{{ u.display_name }}</span>
                 <span v-if="state.unread[u.username]" class="badge">{{ state.unread[u.username] }}</span>
@@ -571,7 +754,7 @@ const app = createApp({
             </div>
             <template v-if="!state.collapseOffline">
               <div v-for="u in offlineUsers" :key="u.username" :class="['user-row', { active: state.activeChat === u.username }]" @click="selectChat(u.username)">
-                <div class="avatar" style="background:#9ca3af">{{ avatarInitial(u.display_name) }}</div>
+                <div class="avatar" style="background:#9ca3af">{{ avatarContent(u) }}</div>
                 <span class="dot"></span>
                 <span class="name">{{ u.display_name }}<small style="color:#9ca3af;margin-left:6px">{{ lastSeenText(u.last_seen_at) }}</small></span>
                 <span v-if="state.unread[u.username]" class="badge">{{ state.unread[u.username] }}</span>
@@ -599,7 +782,7 @@ const app = createApp({
                      @touchstart="onMsgTouchStart($event, m)"
                      @touchend="onMsgTouchEnd"
                      @touchmove="onMsgTouchEnd">
-                  <div class="avatar">{{ avatarInitial(m.from_user) }}</div>
+                  <div class="avatar">{{ avatarByUsername(m.from_user) }}</div>
                   <div class="bubble">
                     <span v-if="m.recalled" class="recalled">该消息已撤回</span>
                     <template v-else>
@@ -659,9 +842,78 @@ const app = createApp({
       <img :src="previewImage">
     </div>
 
-    <div v-if="ctxMenu.visible" class="context-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
-      <button @click="doReplyFromCtx">引用回复</button>
+    <div v-if="ctxMenu.visible && (ctxMenuCanReply || ctxMenuCanRecall)" class="context-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+      <button v-if="ctxMenuCanReply" @click="doReplyFromCtx">引用回复</button>
       <button v-if="ctxMenuCanRecall" @click="doRecall">撤回</button>
+    </div>
+
+    <!-- 账号设置模态框 -->
+    <div v-if="settingsModal.visible" class="modal-overlay" @click="closeSettings">
+      <div class="modal" @click.stop>
+        <div class="modal-header">
+          <span>账号设置</span>
+          <button class="modal-close" @click="closeSettings">✕</button>
+        </div>
+        <div class="modal-tabs">
+          <button :class="{ active: settingsModal.tab === 'profile' }" @click="settingsModal.tab = 'profile'">个人资料</button>
+          <button :class="{ active: settingsModal.tab === 'pin' }" @click="settingsModal.tab = 'pin'">修改 PIN</button>
+        </div>
+        <div v-if="settingsModal.tab === 'profile'" class="modal-body">
+          <div class="modal-label">头像</div>
+          <div class="avatar-preview">
+            <div class="avatar avatar-big">{{ settingsModal.avatar || avatarInitial(settingsModal.display_name || state.currentUser.username) }}</div>
+          </div>
+          <div class="emoji-grid">
+            <span v-for="e in AVATAR_EMOJIS" :key="e" :class="{ selected: settingsModal.avatar === e }" @click="settingsModal.avatar = e">{{ e }}</span>
+            <span :class="{ selected: settingsModal.avatar === '' }" @click="settingsModal.avatar = ''" title="清空">
+              <span style="font-size:13px;color:#888">无</span>
+            </span>
+          </div>
+          <div class="modal-label">昵称</div>
+          <input v-model="settingsModal.display_name" maxlength="40" class="modal-input">
+          <div v-if="settingsModal.profileError" class="modal-error">{{ settingsModal.profileError }}</div>
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="closeSettings">取消</button>
+            <button class="btn-primary" :disabled="settingsModal.profileSaving" @click="saveProfile">{{ settingsModal.profileSaving ? '保存中...' : '保存' }}</button>
+          </div>
+        </div>
+        <div v-else class="modal-body">
+          <div class="modal-label">当前 PIN</div>
+          <input v-model="settingsModal.currentPin" type="password" inputmode="numeric" maxlength="6" class="modal-input">
+          <div class="modal-label">新 PIN (4-6 位数字)</div>
+          <input v-model="settingsModal.newPin" type="password" inputmode="numeric" maxlength="6" class="modal-input">
+          <div class="modal-label">确认新 PIN</div>
+          <input v-model="settingsModal.confirmPin" type="password" inputmode="numeric" maxlength="6" class="modal-input">
+          <div v-if="settingsModal.pinError" class="modal-error">{{ settingsModal.pinError }}</div>
+          <div v-if="settingsModal.pinSuccess" class="modal-success">PIN 已更新</div>
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="closeSettings">关闭</button>
+            <button class="btn-primary" :disabled="settingsModal.pinSaving" @click="savePin">{{ settingsModal.pinSaving ? '保存中...' : '修改 PIN' }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 注销账号模态框 -->
+    <div v-if="deleteModal.visible" class="modal-overlay" @click="closeDeleteAccount">
+      <div class="modal" @click.stop>
+        <div class="modal-header">
+          <span style="color:#FA5151">注销账号</span>
+          <button class="modal-close" @click="closeDeleteAccount">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-box">
+            ⚠️ 注销后无法恢复。你的账号、所有聊天记录和上传的文件将被永久删除。其他用户与你的对话记录中相关消息也会消失。
+          </div>
+          <div class="modal-label">输入 PIN 确认</div>
+          <input v-model="deleteModal.pin" type="password" inputmode="numeric" maxlength="6" class="modal-input">
+          <div v-if="deleteModal.error" class="modal-error">{{ deleteModal.error }}</div>
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="closeDeleteAccount">取消</button>
+            <button class="btn-danger" :disabled="deleteModal.submitting || !deleteModal.pin" @click="confirmDelete">{{ deleteModal.submitting ? '注销中...' : '永久注销' }}</button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
 });
