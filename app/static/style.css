@@ -23,3 +23,21 @@ input, textarea { font-family: inherit; }
 /* 顶部 banner */
 .banner { padding:8px 12px; background:#fef3c7; color:#92400e; font-size:13px; text-align:center; }
 .banner.error { background:#fee2e2; color:#991b1b; }
+
+.me-row { padding:12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #e5e7eb; }
+.avatar { width:36px; height:36px; border-radius:50%; background:#3b82f6; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:600; }
+.me-row .name { flex:1; font-weight:600; }
+.gear { padding:6px 8px; border:none; background:transparent; font-size:18px; }
+.gear-menu { position:absolute; right:8px; top:48px; background:#fff; border:1px solid #e5e7eb; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,.08); z-index:10; }
+.gear-menu button { display:block; width:140px; padding:10px 14px; background:transparent; border:none; text-align:left; }
+.gear-menu button:hover { background:#f3f4f6; }
+
+.user-list { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative; }
+.group-header { padding:8px 12px; font-size:12px; color:#6b7280; cursor:pointer; user-select:none; background:#f9fafb; border-bottom:1px solid #e5e7eb; }
+.user-row { padding:10px 12px; display:flex; align-items:center; gap:8px; cursor:pointer; min-height:44px; }
+.user-row:hover { background:#f3f4f6; }
+.user-row.active { background:#dbeafe; }
+.user-row .name { flex:1; }
+.dot { width:8px; height:8px; border-radius:50%; background:#9ca3af; }
+.dot.online { background:#22c55e; }
+.badge { background:#ef4444; color:#fff; font-size:11px; min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 5px; }

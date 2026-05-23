@@ -198,9 +198,64 @@ const app = createApp({
       }
     }
 
+    const showGearMenu = ref(false);
+
+    const onlineUsers = computed(() => state.users.filter(u => u.online && u.username !== state.currentUser?.username));
+    const offlineUsers = computed(() => state.users.filter(u => !u.online && u.username !== state.currentUser?.username));
+
+    function avatarInitial(name) { return (name || "?").slice(0, 1).toUpperCase(); }
+
+    async function selectChat(username) {
+      state.activeChat = username;
+      state.unread[username] = 0;
+      state.mobileView = "chat";
+      try { await API.post("/api/messages/read", { peer: username }, state.token); } catch {}
+      if (!state.messages[username]) {
+        const data = await API.get(`/api/messages?peer=${encodeURIComponent(username)}&limit=30`, state.token);
+        state.messages[username] = data.messages.map(m => ({ ...m, status: "sent" }));
+      }
+      await nextTick();
+      scrollChatToBottom();
+    }
+
+    function backToList() { state.mobileView = "list"; }
+
+    function scrollChatToBottom() {
+      const el = document.querySelector(".messages");
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+
+    async function doLogout() {
+      try { await API.post("/api/logout", {}, state.token); } catch {}
+      localStorage.removeItem("token");
+      try { ws && ws.close(); } catch {}
+      kicked = true;
+      state.token = "";
+      state.currentUser = null;
+      state.users = [];
+      state.messages = {};
+      state.unread = {};
+      state.activeChat = null;
+      state.view = "login";
+      showGearMenu.value = false;
+    }
+
+    function lastSeenText(ts) {
+      if (!ts) return "从未登录";
+      const diff = Math.floor(Date.now() / 1000 - ts);
+      if (diff < 60) return "刚刚";
+      if (diff < 3600) return `${Math.floor(diff/60)} 分钟前`;
+      if (diff < 86400) return `${Math.floor(diff/3600)} 小时前`;
+      return `${Math.floor(diff/86400)} 天前`;
+    }
+
     onMounted(tryAutoLogin);
 
-    return { state, loginForm, submitLogin };
+    return {
+      state, loginForm, submitLogin,
+      onlineUsers, offlineUsers, avatarInitial, selectChat, backToList,
+      showGearMenu, doLogout, lastSeenText,
+    };
   },
   template: `
     <div v-if="state.view === 'loading'" class="login-page"><div>加载中...</div></div>
@@ -222,7 +277,40 @@ const app = createApp({
     <div v-else style="display:flex;flex-direction:column;height:100dvh">
       <div v-if="state.banner" :class="['banner', state.bannerKind]">{{ state.banner }}</div>
       <div class="main" style="flex:1;min-height:0">
-        <div class="sidebar">用户列表（后续实现）</div>
+        <div class="sidebar" v-show="state.mobileView === 'list'" style="position:relative">
+          <div class="me-row">
+            <div class="avatar">{{ avatarInitial(state.currentUser.display_name) }}</div>
+            <div class="name">{{ state.currentUser.display_name }}</div>
+            <button class="gear" @click="showGearMenu = !showGearMenu">⚙</button>
+          </div>
+          <div v-if="showGearMenu" class="gear-menu">
+            <button @click="doLogout">退出登录</button>
+          </div>
+          <div class="user-list">
+            <div class="group-header" @click="state.collapseOnline = !state.collapseOnline">
+              {{ state.collapseOnline ? '▶' : '▼' }} 在线 ({{ onlineUsers.length }})
+            </div>
+            <template v-if="!state.collapseOnline">
+              <div v-for="u in onlineUsers" :key="u.username" :class="['user-row', { active: state.activeChat === u.username }]" @click="selectChat(u.username)">
+                <div class="avatar">{{ avatarInitial(u.display_name) }}</div>
+                <span class="dot online"></span>
+                <span class="name">{{ u.display_name }}</span>
+                <span v-if="state.unread[u.username]" class="badge">{{ state.unread[u.username] }}</span>
+              </div>
+            </template>
+            <div class="group-header" @click="state.collapseOffline = !state.collapseOffline">
+              {{ state.collapseOffline ? '▶' : '▼' }} 离线 ({{ offlineUsers.length }})
+            </div>
+            <template v-if="!state.collapseOffline">
+              <div v-for="u in offlineUsers" :key="u.username" :class="['user-row', { active: state.activeChat === u.username }]" @click="selectChat(u.username)">
+                <div class="avatar" style="background:#9ca3af">{{ avatarInitial(u.display_name) }}</div>
+                <span class="dot"></span>
+                <span class="name">{{ u.display_name }}<small style="color:#9ca3af;margin-left:6px">{{ lastSeenText(u.last_seen_at) }}</small></span>
+                <span v-if="state.unread[u.username]" class="badge">{{ state.unread[u.username] }}</span>
+              </div>
+            </template>
+          </div>
+        </div>
         <div class="chat-panel"><div class="chat-empty">选择左侧用户开始聊天</div></div>
       </div>
     </div>
