@@ -44,6 +44,9 @@ app.include_router(users_router)
 from app.files import router as files_router
 app.include_router(files_router)
 
+from app.ws import router as ws_router
+app.include_router(ws_router)
+
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
