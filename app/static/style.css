@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background:#f3f4f6; color:#111; }
+button { cursor: pointer; }
+input, textarea { font-family: inherit; }
+
+#app { height: 100dvh; }
+
+/* 登录页 */
+.login-page { height:100dvh; display:flex; align-items:center; justify-content:center; }
+.login-card { background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.08); width:320px; }
+.login-card h2 { margin:0 0 16px; text-align:center; }
+.login-card input { width:100%; padding:10px; margin-bottom:12px; border:1px solid #e5e7eb; border-radius:6px; }
+.login-card button { width:100%; padding:10px; background:#3b82f6; color:#fff; border:none; border-radius:6px; font-size:14px; }
+.login-card .switch { text-align:center; margin-top:12px; color:#3b82f6; cursor:pointer; }
+.login-card .error { color:#ef4444; font-size:13px; margin-bottom:8px; }
+
+/* 主界面骨架 (PC) */
+.main { display:grid; grid-template-columns: 280px 1fr; height:100dvh; }
+.sidebar { background:#fff; border-right:1px solid #e5e7eb; display:flex; flex-direction:column; }
+.chat-panel { display:flex; flex-direction:column; background:#f9fafb; }
+.chat-empty { display:flex; align-items:center; justify-content:center; color:#9ca3af; flex:1; }
+
+/* 顶部 banner */
+.banner { padding:8px 12px; background:#fef3c7; color:#92400e; font-size:13px; text-align:center; }
+.banner.error { background:#fee2e2; color:#991b1b; }
