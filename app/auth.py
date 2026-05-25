@@ -39,6 +39,18 @@ async def register(req: RegisterRequest):
         )
         await conn.commit()
     token = await _create_session(req.username)
+    from app.ws import manager
+    await manager.broadcast({
+        "type": "user_added",
+        "user": {
+            "username": req.username,
+            "display_name": req.display_name,
+            "avatar": None,
+            "online": False,
+            "last_seen_at": None,
+            "unread": 0,
+        },
+    })
     return {"token": token}
 
 

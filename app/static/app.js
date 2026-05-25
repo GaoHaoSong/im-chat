@@ -121,6 +121,10 @@ const app = createApp({
           u.display_name = m.user.display_name;
           u.avatar = m.user.avatar;
         }
+      } else if (m.type === "user_added") {
+        if (!state.users.find(x => x.username === m.user.username)) {
+          state.users.push(m.user);
+        }
       } else if (m.type === "user_deleted") {
         const idx = state.users.findIndex(x => x.username === m.username);
         if (idx >= 0) state.users.splice(idx, 1);

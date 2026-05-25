@@ -50,3 +50,18 @@ def test_ws_presence_broadcast(isolated_db):
                 assert msg["type"] == "presence"
                 assert msg["user"] == "bob"
                 assert msg["online"] is True
+
+
+def test_register_broadcasts_user_added(isolated_db):
+    from app.main import app
+    with TestClient(app) as c:
+        ta = c.post("/api/register", json={"username": "alice", "pin": "1234", "display_name": "A"}).json()["token"]
+        with c.websocket_connect(f"/ws?token={ta}") as ws_a:
+            r = c.post("/api/register", json={"username": "bob", "pin": "1234", "display_name": "Bob"})
+            assert r.status_code == 200
+            msg = ws_a.receive_json()
+            assert msg["type"] == "user_added"
+            assert msg["user"]["username"] == "bob"
+            assert msg["user"]["display_name"] == "Bob"
+            assert msg["user"]["online"] is False
+            assert msg["user"]["unread"] == 0
