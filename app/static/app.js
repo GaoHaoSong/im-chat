@@ -157,7 +157,58 @@ const app = createApp({
       if (msg.from_user !== state.currentUser.username && state.activeChat !== msg.from_user) {
         state.unread[msg.from_user] = (state.unread[msg.from_user] || 0) + 1;
       }
+      if (msg.from_user !== state.currentUser.username
+          && (document.hidden || state.activeChat !== msg.from_user)) {
+        notifyIncoming(msg);
+      }
+      updateDocumentTitle();
     }
+
+    function maybeRequestNotificationPermission() {
+      if (!("Notification" in window)) return;
+      if (Notification.permission === "default") {
+        try { Notification.requestPermission(); } catch {}
+      }
+    }
+
+    function notifyBody(msg) {
+      if (msg.kind === "text") {
+        const t = msg.content || "";
+        return t.length > 120 ? t.slice(0, 117) + "..." : t;
+      }
+      if (msg.kind === "image") return "[图片]";
+      if (msg.kind === "file") {
+        const meta = fileMeta(msg.content);
+        return meta ? `[文件] ${meta.name}` : "[文件]";
+      }
+      return "新消息";
+    }
+
+    function notifyIncoming(msg) {
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const peer = msg.from_user;
+      const u = state.users.find(x => x.username === peer);
+      const title = u?.display_name || peer;
+      try {
+        const n = new Notification(title, {
+          body: notifyBody(msg),
+          tag: `peer:${peer}`,
+          renotify: true,
+        });
+        n.onclick = () => {
+          window.focus();
+          selectChat(peer);
+          n.close();
+        };
+      } catch {}
+    }
+
+    const ORIGINAL_TITLE = document.title;
+    function updateDocumentTitle() {
+      const total = Object.values(state.unread).reduce((a, b) => a + (b || 0), 0);
+      document.title = (document.hidden && total > 0) ? `(${total}) ${ORIGINAL_TITLE}` : ORIGINAL_TITLE;
+    }
+    document.addEventListener("visibilitychange", updateDocumentTitle);
 
     function onRecalled(m) {
       for (const peer of Object.keys(state.messages)) {
@@ -205,6 +256,7 @@ const app = createApp({
       kicked = false;
       await loadUsers();
       connectWs();
+      maybeRequestNotificationPermission();
     }
 
     async function loadUsers() {
